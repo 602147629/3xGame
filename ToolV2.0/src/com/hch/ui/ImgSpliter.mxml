@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Script>
+	<![CDATA[
+		import com.hch.util.CCheckRectUtil;
+		import com.hch.util.CImgUtil;
+		
+		import flash.events.Event;
+		import flash.net.FileFilter;
+		
+		import spark.components.WindowedApplication;   
+		
+		public var window:WindowedApplication;
+		private var fileRL:File;  
+
+		private var _cutBitmap:BitmapData;
+
+		private var loadedImg:Bitmap;
+		private var __resultBmd:BitmapData;
+		private var __dirpath:String;
+		private var grayImg:Bitmap;
+		private var _grayBmd:BitmapData;
+		
+		private var _timeStart:Number = 0;
+		private var _timeEnd:Number = 0;
+		
+		private function showWindow(imgStr:String, str:String):void
+		{   
+			fileRL = new File();   
+			fileRL.browse([new FileFilter(imgStr, str)]);    
+			fileRL.addEventListener(Event.SELECT, onFileSelect);    
+		}               
+		
+		private function onFileSelect(event:Event):void
+		{    
+			__dirpath = fileRL.parent.nativePath;
+			trace("path == " + __dirpath);
+			__loadPng();
+		}   
+		
+		private function __loadPng():void
+		{
+			if(_cutBitmap)
+			{
+				_cutBitmap.dispose();
+				_cutBitmap = null;
+			}
+			
+			loadimgContainer.removeChildren();
+			CImgUtil.loadPng(fileRL.nativePath , __loadComplete);
+		}
+		
+		protected function __loadComplete(bmd:BitmapData):void
+		{
+			loadedImg = new Bitmap(bmd);
+			_cutBitmap = bmd;
+			loadimgContainer.addChild(loadedImg);
+			
+			_grayBmd = CImgUtil.getGrayBmd(bmd)
+			grayImg = new Bitmap(_grayBmd);
+			
+			window.status = "加载完成";
+		}
+		
+		private function spliteImg(event:Event):void
+		{
+			_timeStart = new Date().time;
+			
+			this.enabled = false;
+			this.mouseEnabled = false;
+			
+			window.status = "正在检测区域";
+			
+			CCheckRectUtil.init(_grayBmd);
+			
+			var rectList:Array = CCheckRectUtil.getMaxRectangle();
+			
+			window.status = "检测区域完成 , 开始导出图片....";
+			
+			for(var i:int =0 ; i< rectList.length ; i++)
+			{
+				__exportRectPng(rectList[i]);
+			}
+			
+			this.enabled = true;
+			this.mouseEnabled = true;
+			
+			_timeEnd = new Date().time;
+			
+			window.status = "导出所有图完成....总共用时: " + (_timeEnd - _timeStart) / 1000 + "秒";
+			trace("总共用时: " + (_timeEnd - _timeStart) / 1000 + "秒" );
+		}
+		
+		private function __exportRectPng(rect:Rectangle):void
+		{
+			if(rect == null)
+			{
+				trace("不合法 rect " , rect.left , rect.right , rect.width , rect.height);
+				return;
+			}
+			
+			if(rect.width == 0 || rect.height == 0)
+			{
+				window.status = "没有需要导出的图";
+				return;
+			}
+			
+			__resultBmd = new BitmapData(rect.width , rect.height , true , 0x00);
+			__resultBmd.copyPixels(_cutBitmap , rect , new Point(0, 0));
+
+			__exportPNG(__resultBmd);
+		}
+		
+		private function __exportPNG(bmd:BitmapData):void
+		{
+			window.status = "正在导出图片.......";
+			var path:String = __dirpath + "\\" + String(new Date().time) +".png";
+			CImgUtil.exportPng(path , bmd);
+			
+			window.status = "导出图片完成 , 路径 " + path;
+			
+		}
+		
+		private function scaleImg(event:Event):void
+		{    
+			if(!_cutBitmap)
+			{
+				window.status = "先选择要缩放的图";
+				return;
+			}
+			
+			var imgWidth:int = int(imgwidth.text);
+			var imgHeight:int = int(imgheight.text);
+			
+			var scaleX:Number = 1;
+			var scaleY:Number = 1;
+			
+			if(imgWidth != 0 && imgHeight != 0)
+			{
+				scaleX = Number(imgWidth/_cutBitmap.width);
+				scaleY = Number(imgHeight /_cutBitmap.height );
+			}
+			else
+			{
+				scaleX = Number(scalex.text);
+				scaleY = Number(scaley.text);
+			}
+			
+			var smooth:Boolean = int(smoothy.text) >= 1;
+			
+			var resultBmd:BitmapData = CImgUtil.scaleBitmapdata(scaleX , scaleY , _cutBitmap);
+			var path:String = __dirpath + "\\"+String(new Date().time)+"scalx_"+scaleX+"_scaly_"+scaleY+".png";
+			
+			var scaleBmp:Bitmap = new Bitmap(resultBmd , "auto" , smooth);
+			
+			loadimgContainer.removeChildren();
+			loadimgContainer.addChild(scaleBmp);
+			
+			CImgUtil.exportPng(path , resultBmd);
+		}
+		
+		private function showGray(event:Event):void
+		{    
+			loadimgContainer.removeChildren();
+			loadimgContainer.addChild(grayImg);
+		}
+		
+		private function showColor(event:Event):void
+		{    
+			loadimgContainer.removeChildren();
+			loadimgContainer.addChild(loadedImg);
+		}
+	]]>
+	</fx:Script>
+	<fx:Declarations>
+	</fx:Declarations>
+	<mx:HBox label="图片合并">
+		<mx:Button id="openButID" label="选分割图"  
+				   click="showWindow('Images (*.jpg, *.gif, *.png)', '*.jpg;*.gif;*.png');"/>   
+		
+		<mx:Button id="graybtn" label="黑白"  
+				   click="showGray(event);"/>  
+		
+		<mx:Button id="colorbtn" label="原色"  
+				   click="showColor(event);"/>  
+		
+		<mx:Button id="splitbtn" label="点击分割"  
+				   click="spliteImg(event);"/> 
+		
+		<s:Label text="ScaleX : " paddingTop="6" textAlign="center"/>
+		<s:TextInput id="scalex" text="0.5" textAlign="center" width="80"/>
+		<s:Label text="ScaleY : " paddingTop="6"  textAlign="center" verticalAlign="middle"/>
+		<s:TextInput id="scaley" text="0.5" textAlign="center" width="80"/>
+		
+		<s:Label text="抖动 : " paddingTop="6"  textAlign="center" verticalAlign="middle"/>
+		<s:TextInput id="smoothy" text="1" textAlign="center" width="80"/>
+		
+		<mx:Button id="scalebtn" label="点击缩放"  
+				   click="scaleImg(event);"/>
+		
+		<s:Label text="width : " paddingTop="6" textAlign="center"/>
+		<s:TextInput id="imgwidth" text="0" textAlign="center" width="80"/>
+		<s:Label text="height : " paddingTop="6"  textAlign="center" verticalAlign="middle"/>
+		<s:TextInput id="imgheight" text="0" textAlign="center" width="80"/>
+		
+	</mx:HBox>
+		
+	<s:SpriteVisualElement id="loadimgContainer" y="30">
+		
+	</s:SpriteVisualElement>
+</s:Group>

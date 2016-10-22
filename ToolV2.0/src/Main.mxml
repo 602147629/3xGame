@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:hch="com.hch.*"
+					   close="windowedapplication1_closeHandler(event)"
+					   creationComplete="windowedapplication1_creationCompleteHandler(event)"
+					   addedToStage="windowedapplication1_addedToStageHandler(event)" xmlns:ui="com.hch.ui.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.hch.property.CPropertys;
+			
+			import mx.events.FlexEvent;
+			
+			[Embed(source="asserts/icon16.png")] 
+			private var _cls:Class;
+			
+			protected function windowedapplication1_closeHandler(event:Event):void
+			{
+				imgCombine.windowedapplication1_closeHandler(event);
+			}
+			
+			
+			protected function windowedapplication1_creationCompleteHandler(event:FlexEvent):void
+			{
+				this.title = "三消工具集";
+//				this.titleIcon = _cls;
+				
+				CPropertys.getInstance().load();
+			}
+			
+			protected function windowedapplication1_addedToStageHandler(event:Event):void
+			{
+				this.maximize();
+			}
+			
+			protected function onClick(event:Event):void
+			{
+				imgCombine.removeImg();
+			}
+			
+			protected function splite_addedHandler(event:Event):void
+			{
+				imgSpliter.window = this;
+			}
+			
+			protected function imgCombine_addedHandler(event:Event):void
+			{
+				imgCombine.window = this;
+			}
+			
+			protected function jsonExporter_addedHandler(event:Event):void
+			{
+				jsonExporter.x = (this.width - jsonExporter.width) / 2;
+				
+				jsonExporter.y = 50;
+				
+				jsonExporter.window = this;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		
+	</fx:Declarations>
+	
+	<s:VGroup left="10" right="0" top="10" bottom="0">
+		<mx:TabNavigator id="tn"  width="100%" height="100%">
+			<mx:VBox label="图片合并" hide="onClick(event)" id="combine" >
+				<ui:ImgCombine id="imgCombine" added="imgCombine_addedHandler(event)">
+					
+				</ui:ImgCombine>
+			</mx:VBox>
+			
+			<mx:VBox label="图片拆分">
+				<ui:ImgSpliter id="imgSpliter" added="splite_addedHandler(event)">
+					
+				</ui:ImgSpliter>
+			</mx:VBox>
+			
+			<mx:VBox label="JSON工具">
+				<ui:JsonExporter id="jsonExporter" added="jsonExporter_addedHandler(event)">
+					
+				</ui:JsonExporter>
+			</mx:VBox>
+		</mx:TabNavigator>
+	</s:VGroup>
+</s:WindowedApplication>

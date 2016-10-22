@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="1024" height="650" addedToStage="group1_addedHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.utils.CFile;
+			
+			import engine_starling.utils.SPathUtils;
+			import engine_starling.utils.SStringUtils;
+			
+			import lib.engine.utils.CFileUtils;
+			
+			import tools.sys.Platform;
+			import tools.sys.ui.CJMessageBox;
+			
+			/*导出服务端配置*/
+			private var _export_serverproperty:Object;
+			/*导出客户端配置*/
+			private var _export_clientproperty:Object;
+			
+			
+			/*读取文件内容*/
+			private function _buildexportPropertys():void
+			{
+				var bytes:ByteArray = CFile.FileRead(new File(Platform.o.syspro.DataExportServerConfig));
+				_export_serverproperty = JSON.parse(bytes.toString());
+				
+				bytes = CFile.FileRead(new File(Platform.o.syspro.DataExportClientConfig));
+				_export_clientproperty = JSON.parse(bytes.toString());
+			}
+			
+			/**
+			 * 实际导出文件内容
+			 */
+			private function _exportData(file:File):void
+			{
+				//导出客户端
+				for each(var obj:Object in _export_clientproperty.filters)
+				{
+					if(obj.srcfile == file.name)
+					{
+						var bytes:ByteArray = CFile.FileRead(file);
+						var export_title:Array = new Array();
+						var outobj:Object = CFileUtils.ExportCSVToJson(bytes,"c",5,export_title);
+						var as3classname:String = "Json_" + (obj["outfile"] as String).split('.')[0];
+						var as3title:String = "/**\n";
+						as3title +="* gen by tools!\n";
+						as3title +="* time:" +  new Date().toString()+ "\n";
+						as3title +="* from:" + file.name+ "\n";
+						as3title +="* to:" + (obj["outfile"] as String) + "\n";
+						as3title +="**/\n";
+						var as3file:String = CFileUtils.GenPropertyClass(txt_AS3_packname.text,as3classname,export_title);
+						as3title +=as3file;
+						CFile.FileWriteString(new File(Platform.o.syspro.DataExportDest +"/" + _export_clientproperty["outdir"] + obj["outfile"]),JSON.stringify(outobj));
+						//输出AS3文件
+						CFile.FileWriteString(new File(Platform.o.syspro.DataExportDest +"/" + _export_clientproperty["outdir"] +"as3/" +  as3classname + ".as"),as3title);
+						break;
+					}
+				}
+				
+				//导出服务端
+				for each(obj in _export_serverproperty.filters)
+				{
+					if(obj.srcfile == file.name)
+					{
+						bytes = CFile.FileRead(file);
+						
+						var export_title:Array = new Array();
+						var outobj:Object = CFileUtils.ExportCSVToJson(bytes,"s",5,export_title);
+						
+						var pythonall:String = "# -*- coding: utf-8 -*-\n";
+						pythonall += "#gen by tools!\n";
+						pythonall += "#time:" +  new Date().toString() + "\n";
+						var pythonclassname:String = "Json_" + (obj["outfile"] as String).split('.')[0];
+						var pythonBody:String = CFileUtils.GenPythonClass(pythonclassname,export_title);
+						pythonall += pythonBody + "\n";
+						//输出Python文件
+						CFile.FileWriteString(new File(Platform.o.syspro.DataExportDest +"/" + _export_serverproperty["outdir"] +"python/" +  pythonclassname + ".py"),pythonall);
+						CFile.FileWriteString(new File(Platform.o.syspro.DataExportDest +"/" + _export_serverproperty["outdir"] + obj["outfile"]),JSON.stringify(outobj));
+						break;
+					}
+				}
+			}
+			
+			private function _savePathOnExport():void
+			{
+				//保存服务端配置
+				Platform.o.syspro.DataExportServerConfig = _txt_Server_Config.text;
+				
+				//保存客户端配置
+				Platform.o.syspro.DataExportClientConfig = _txt_Client_Config.text;
+				
+				//点击导出保存客户端配置
+				Platform.o.syspro.DataExportSource = _txt_DataExportSourcePath.text;
+				
+				//点击导出保存客户端配置
+				Platform.o.syspro.DataExportDest = _txt_DataExportPath.text;
+				
+				//点击导出保存as包名
+				Platform.o.syspro.as3exportPackName = txt_AS3_packname.text;
+				Platform.o.syspro.JsonToBinPath = _txt_JsonBinPath.text;
+				
+				Platform.o.syspro.save();
+			}
+			
+			protected function btn_export(event:MouseEvent):void
+			{
+				this.enabled = false;
+				_savePathOnExport();
+				_buildexportPropertys();
+				var arr:Array = CFile.getFileList(new File(Platform.o.syspro.DataExportSource),[".csv"]);
+				for each(var file:File in arr)
+				{
+					_exportData(file);
+				}
+				
+				var msg:CJMessageBox = new CJMessageBox("数据导出完成!" , this);
+				
+				msg.tryOpen();
+				
+			}
+			
+			/**
+			 * 选择服务端导出配置文件
+			 */
+			protected function btn_selected_ServerPro(event:MouseEvent):void
+			{
+				var file:File = new File(Platform.o.syspro.DataExportServerConfig == ""?File.applicationDirectory.nativePath:Platform.o.syspro.DataExportServerConfig);
+				var filefilter:FileFilter = new FileFilter("配置文件(*.json)","*.json");
+				file.browseForOpen("选择服务端配置",[filefilter]);
+				file.addEventListener(Event.SELECT,
+					function(e:Event):void{
+						var file:File = e.target as File;
+						_txt_Server_Config.text = file.nativePath;
+					});
+			}
+			
+			/**
+			 * 选择客户端导出配置文件
+			 */
+			protected function btn_selected_ClientPro(event:MouseEvent):void
+			{
+				var file:File = new File(Platform.o.syspro.DataExportClientConfig == ""?File.applicationDirectory.nativePath:Platform.o.syspro.DataExportClientConfig);
+				var filefilter:FileFilter = new FileFilter("配置文件(*.json)","*.json");
+				file.browseForOpen("选择客户端配置",[filefilter]);
+				file.addEventListener(Event.SELECT,
+					function(e:Event):void{
+						var file:File = e.target as File;
+						_txt_Client_Config.text = file.nativePath;
+					});
+			}
+			
+			/**
+			 * 选择数据源配置文件
+			 */
+			protected function btn_selected_ExportDataSource(event:MouseEvent):void
+			{
+				var file:File = new File(Platform.o.syspro.DataExportSource == ""?File.applicationDirectory.nativePath:Platform.o.syspro.DataExportSource);
+				file.browseForDirectory("数据源路径");
+				file.addEventListener(Event.SELECT,
+					function(e:Event):void{
+						var file:File = e.target as File;
+						_txt_DataExportSourcePath.text = file.nativePath;
+					});
+			}
+			
+			/**
+			 * 选择导出路径
+			 */
+			protected function btn_selected_ExportedPath(event:MouseEvent):void
+			{
+				var file:File = new File(Platform.o.syspro.DataExportDest == ""?File.applicationDirectory.nativePath:Platform.o.syspro.DataExportDest);
+				file.browseForDirectory("数据源导出路径");
+				file.addEventListener(Event.SELECT,
+					function(e:Event):void{
+						var file:File = e.target as File;
+						_txt_DataExportPath.text = file.nativePath;
+					});
+			}
+			
+			protected function group1_addedHandler(event:Event):void
+			{
+				_txt_Server_Config.text = Platform.o.syspro.DataExportServerConfig;
+				_txt_Client_Config.text = Platform.o.syspro.DataExportClientConfig;
+				_txt_DataExportSourcePath.text = Platform.o.syspro.DataExportSource;
+				_txt_DataExportPath.text = Platform.o.syspro.DataExportDest;
+				_txt_JsonBinPath.text = Platform.o.syspro.JsonToBinPath;
+				
+				if(!SStringUtils.isEmpty(Platform.o.syspro.as3exportPackName))
+				{
+					txt_AS3_packname.text = (Platform.o.syspro.as3exportPackName as String);
+				}
+			}
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				var file:File = new File(Platform.o.syspro.JsonToBinPath == ""?File.applicationDirectory.nativePath:Platform.o.syspro.JsonToBinPath);
+				file.browseForDirectory("JSON转换路径");
+				file.addEventListener(Event.SELECT,
+					function(e:Event):void{
+						var file:File = e.target as File;
+//						Platform.o.syspro.JsonToBinPath = file.nativePath;
+						_txt_JsonBinPath.text = file.nativePath;
+						
+						_savePathOnExport();
+					});
+				
+			}
+			
+			protected function btnExport0_clickHandler(event:MouseEvent):void
+			{
+				if(SStringUtils.isEmpty(_txt_JsonBinPath.text))
+				{
+					return;
+				}
+//				var msg:CJMessageBox = new CJMessageBox("数据导出完成!" , this);
+				
+//				msg.tryOpen();
+				
+				var files:Array = SPathUtils.o.getFileList(new File(_txt_JsonBinPath.text),[".anims",".json"]);
+				var fileBuffer:ByteArray = new ByteArray();
+				var writeBuffer:ByteArray = new ByteArray();
+				for each(var f:File in files)
+				{
+					writeBuffer.clear();
+					fileBuffer.clear();
+					if(SPathUtils.o.readFileToByteArray(f.nativePath,fileBuffer))
+					{
+						var binObject:Object = JSON.parse(fileBuffer.toString());
+						writeBuffer.writeObject(binObject);
+						SPathUtils.o.WriteByteArrayToFile(writeBuffer,f.nativePath + "bin");
+						
+						writeBuffer.clear();
+						writeBuffer.writeMultiByte(_exportluadata(f.name.replace("." + f.extension,""),binObject),"utf8");
+						SPathUtils.o.WriteByteArrayToFile(writeBuffer,f.nativePath.replace(f.extension,"lua"));
+						
+					}
+					
+				}
+			}
+			
+			private function _isbaseType(obj:Object):Boolean
+			{
+				if(obj is int ||
+					obj is Number||
+					obj is Boolean ||
+					obj is String
+					)
+				{
+					return true;
+				}
+				return false;
+			}
+			
+			//导出lua数据
+			private function _exportluadata(dataname:String,data:Object):String
+			{
+				//name
+				var outstring:String = "";
+				outstring += "jsondata_" + dataname + " = ";
+//				for(var i:int=1;i<data.length + 1;i++)
+//				{
+//					var sdata:Object = data[i];
+//					outstring += "\t" + i + ":{"
+//					for (var k:String in sdata)
+//					{
+//						outstring += k + ":\"" + sdata[k] + "\","
+//					}
+//					outstring =  outstring.substring(0,outstring.length - 1);
+//					outstring += "}";
+//					
+//					if(i< data.length + 1)
+//					{
+//						outstring += ",";
+//					}
+//					outstring += "\n";
+//				}
+				outstring += _exportluaarray(data);
+//				outstring += "}"
+				
+				return outstring;
+			}
+			
+			private function _exportluadic(data:Object):String
+			{
+				var outstring:String = "{";
+				for (var k:String in data)
+				{
+					var sdata:Object = data[k];
+					outstring += k + "=";
+					
+					var dicdata:Dictionary = sdata as Dictionary;
+					
+					if( _isbaseType(sdata))
+					{
+						outstring += "\"" + data[k] + "\"";
+					}
+					else if(sdata is Array)
+					{
+						outstring += _exportluaarray(sdata);	
+					}
+					else
+					{
+						outstring += _exportluadic(sdata);
+						
+					}
+					
+					outstring += ",";
+				}
+				outstring =  outstring.substring(0,outstring.length - 1);
+				outstring += "}";
+				
+				return outstring;
+			}
+			private function _exportluaarray(data:Object):String
+			{
+				var outstring:String = "{\n";
+				for(var i:int=0;i<data.length;i++)
+				{
+					var sdata:Object = data[i];
+					outstring += "\t[" + (i + 1) + "]="
+					var dicdata:Dictionary = sdata as Dictionary;
+					if( _isbaseType(sdata))
+					{
+						outstring += sdata;
+					}
+					else if(sdata is Array)
+					{
+						outstring += _exportluaarray(sdata);	
+					}
+					else
+					{
+						outstring += _exportluadic(sdata);
+						
+					}
+					
+					if(i< data.length - 1)
+					{
+						outstring += ",";
+					}
+					outstring += "\n";
+				}
+				outstring += "}";
+				
+				return outstring;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<s:Button x="680" y="40" width="37" label="..." click="btn_selected_ServerPro(event)"/>
+	<s:Button x="681" y="78" width="37" label="..." click="btn_selected_ClientPro(event)"/>
+	<s:Button x="681" y="122" width="37" label="..." click="btn_selected_ExportDataSource(event)"/>
+	<s:TextInput id="_txt_Server_Config" x="143" y="39" width="529" enabled="true"/>
+	<s:TextInput id="_txt_Client_Config" x="143" y="79" width="529" enabled="true"/>
+	<s:TextInput id="_txt_DataExportSourcePath" x="143" y="123" width="529" enabled="true"/>
+	<s:TextInput id="_txt_DataExportPath" x="142" y="164" width="529" enabled="true"/>
+	<s:Label x="27" y="220" text="AS3导出类包名"/>
+	<s:Label x="27" y="307" text="JSON-&gt;JSONBIN"/>
+	<s:Label x="27" y="43" text="服务端数据配置文件"/>
+	<s:Label x="27" y="87" text="客户端数据配置文件"/>
+	<s:Label x="27" y="129" text="数据源路径"/>
+	<s:Button id="btnExport" x="482" y="250" label="导出数据文件" click="btn_export(event)"/>
+	<s:Button id="btnExport0" x="482" y="331" label="转换JSON文件到二进制及Lua"
+			  click="btnExport0_clickHandler(event)"/>
+	<s:Label x="27" y="173" text="数据导出路径"/>
+	<s:Button x="681" y="164" width="37" label="..." click="btn_selected_ExportedPath(event)"/>
+	<s:TextInput id="txt_AS3_packname" x="142" y="210" width="279"/>
+	<s:TextInput id="_as3exportpackname" x="142" y="250"/>
+	<s:TextInput id="_txt_JsonBinPath" x="138" y="301" width="533"/>
+	<s:Button x="681" y="301" width="37" label="..." click="button1_clickHandler(event)"/>
+</s:Group>

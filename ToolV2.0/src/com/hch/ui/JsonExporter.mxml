@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="80%" height="80%" creationComplete="group1_creationCompleteHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.hch.property.CPropertys;
+			import com.hch.util.CFileUtil;
+			
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			
+			public var window:Main;
+			/*导出服务端配置*/
+			private var _export_serverproperty:Object;
+			/*导出客户端配置*/
+			private var _export_clientproperty:Object;
+			//当前选中的按钮
+			private var _tempSelectkey:String = "";
+			
+			
+			/*读取文件内容*/
+			private function _buildexportPropertys():void
+			{
+				
+			}
+			
+			/**
+			 * 实际导出文件内容
+			 */
+			private function _exportData(file:File):void
+			{
+				__exportClient(file);
+				__exportServer(file);
+			}
+			
+			//保存配置
+			private function _savePathOnExport():void
+			{
+				CPropertys.getInstance().propertyContainer.strPathOfServer = strPathOfServer_tf.text;
+				
+				CPropertys.getInstance().propertyContainer.strPathOfClient = strPathOfClient_tf.text;
+				
+				CPropertys.getInstance().propertyContainer.strPathOfSource = strPathOfSource_tf.text;
+				
+				CPropertys.getInstance().propertyContainer.strPathOfExport = strPathOfExport_tf.text;
+				
+				//点击导出保存as包名
+				CPropertys.getInstance().propertyContainer.txt_AS3_packname = txt_AS3_packname.text;
+				
+				CPropertys.getInstance().serialization();
+				CPropertys.getInstance().save();
+			}
+			
+			protected function btn_export(event:MouseEvent):void
+			{
+				_savePathOnExport();
+				this.enabled = false;
+				_savePathOnExport();
+				_buildexportPropertys();
+				var arr:Array = CFileUtil.getFileList(new File(CPropertys.getInstance().propertyContainer.strPathOfSource),[".csv"]);
+				for each(var file:File in arr)
+				{
+					_exportData(file);
+				}
+				
+				Alert.show("数据导出完成");
+			}
+			
+			private function _isbaseType(obj:Object):Boolean
+			{
+				if(obj is int ||
+					obj is Number||
+					obj is Boolean ||
+					obj is String
+				)
+				{
+					return true;
+				}
+				return false;
+			}
+			
+			/**
+			 * 选择各种路径
+			 */
+			private function btn_selected(event:MouseEvent, sid:String):void
+			{
+				_tempSelectkey = sid;
+				var openPath:String = File.applicationDirectory.nativePath;
+				if(CPropertys.getInstance().hasOwnProperty(sid))
+				{
+					openPath = CPropertys.getInstance().propertyContainer[sid];
+				}
+				var file:File = new File(openPath);
+				
+				if(sid == "strPathOfClient_tf" || sid == "strPathOfServer_tf")
+				{
+					var filefilter:FileFilter = new FileFilter("配置文件(*.json)","*.json");
+					file.browseForOpen("选择 =>"+sid ,[filefilter]);
+				}
+				else
+				{
+					file.browseForDirectory("选择 =>"+sid);
+				}
+				
+				file.addEventListener(Event.SELECT, __onFileSelected);
+			}
+			
+			protected function __onFileSelected(event:Event):void
+			{
+				var file:File = event.target as File;
+				this[_tempSelectkey].text = file.nativePath;
+			}
+			
+			public function fillPath():void
+			{
+				strPathOfServer_tf.text = CPropertys.getInstance().propertyContainer.strPathOfServer;
+				
+				strPathOfClient_tf.text = CPropertys.getInstance().propertyContainer.strPathOfClient;
+				
+				strPathOfSource_tf.text = CPropertys.getInstance().propertyContainer.strPathOfSource;
+				
+				strPathOfExport_tf.text = CPropertys.getInstance().propertyContainer.strPathOfExport;
+				//点击导出保存as包名
+				txt_AS3_packname.text = CPropertys.getInstance().propertyContainer.txt_AS3_packname;
+			}
+			
+			protected function group1_creationCompleteHandler(event:FlexEvent):void
+			{
+				fillPath();
+				
+			}
+			
+			private function __exportClient(file:File):void
+			{
+				//导出客户端
+				for each(var obj:Object in _export_clientproperty.filters)
+				{
+					if(obj.srFileUtil == file.name)
+					{
+						var bytes:ByteArray = CFileUtil.FileRead(file);
+						var export_title:Array = new Array();
+						var outobj:Object = CFileUtil.ExportCSVToJson(bytes,"c",5,export_title);
+						var as3classname:String = "Json_" + (obj["outfile"] as String).split('.')[0];
+						var as3title:String = "/**\n";
+						as3title +="* gen by tools!\n";
+						as3title +="* time:" +  new Date().toString()+ "\n";
+						as3title +="* from:" + file.name+ "\n";
+						as3title +="* to:" + (obj["outfile"] as String) + "\n";
+						as3title +="**/\n";
+						var as3file:String = CFileUtil.GenPropertyClass(txt_AS3_packname.text,as3classname,export_title);
+						as3title +=as3file;
+						CFileUtil.FileWriteString(new File(CPropertys.getInstance().propertyContainer.strPathOfExport +"/" + _export_clientproperty["outdir"] + obj["outfile"]),JSON.stringify(outobj));
+						//输出AS3文件
+						CFileUtil.FileWriteString(new File(CPropertys.getInstance().propertyContainer.strPathOfExport +"/" + _export_clientproperty["outdir"] +"as3/" +  as3classname + ".as"),as3title);
+						break;
+					}
+				}
+			}
+			
+			private function __exportServer(file:File):void
+			{
+				//导出服务端
+				for each(var obj:Object in _export_serverproperty.filters)
+				{
+					if(obj.srFileUtil == file.name)
+					{
+						var bytes:ByteArray = CFileUtil.FileRead(file);
+						
+						var export_title:Array = new Array();
+						var outobj:Object = CFileUtil.ExportCSVToJson(bytes,"s",5,export_title);
+						
+						var pythonall:String = "# -*- coding: utf-8 -*-\n";
+						pythonall += "#gen by tools!\n";
+						pythonall += "#time:" +  new Date().toString() + "\n";
+						var pythonclassname:String = "Json_" + (obj["outfile"] as String).split('.')[0];
+						var pythonBody:String = CFileUtil.GenPythonClass(pythonclassname,export_title);
+						pythonall += pythonBody + "\n";
+						//输出Python文件
+						CFileUtil.FileWriteString(new File(CPropertys.getInstance().propertyContainer.strPathOfExport +"/" + _export_serverproperty["outdir"] +"python/" +  pythonclassname + ".py"),pythonall);
+						CFileUtil.FileWriteString(new File(CPropertys.getInstance().propertyContainer.strPathOfExport +"/" + _export_serverproperty["outdir"] + obj["outfile"]),JSON.stringify(outobj));
+						break;
+					}
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<mx:VBox>
+		<s:Label paddingTop="6" textAlign="center" width="600" text="CSV ===> JSON ====> AS"/>
+		
+		<mx:HBox paddingTop=" 30 ">
+			<s:Label paddingTop="6" textAlign="left" width="150" text="客户端数据配置文件"/>
+			<s:TextInput id="strPathOfClient_tf"  width="529" enabled="true"/>
+			<s:Button label="选择文件" id= "strPathOfClient" click="btn_selected(event , strPathOfClient_tf.id)"/>
+		</mx:HBox>
+		
+		<mx:HBox paddingTop=" 30 ">
+			<s:Label paddingTop="6" textAlign="left" width="150" text="服务端数据配置文件"/>
+			<s:TextInput id="strPathOfServer_tf" width="529" enabled="true"/>
+			<s:Button label="选择文件" id= "strPathOfServer" click="btn_selected(event, strPathOfServer_tf.id)"/>
+		</mx:HBox>
+		
+		<mx:HBox paddingTop=" 30 ">
+			<s:Label paddingTop="6" textAlign="left" width="150" text="数据源路径"/>
+			<s:TextInput id="strPathOfSource_tf" width="529" enabled="true"/>
+			<s:Button label="选择目录" id= "strPathOfSource" click="btn_selected(event, strPathOfSource_tf.id)"/>
+		</mx:HBox>
+		
+		<mx:HBox paddingTop=" 30 ">
+			<s:Label paddingTop="6" textAlign="left" width="150" text="数据导出路径"/>
+			<s:TextInput id="strPathOfExport_tf" width="529" enabled="true"/>
+			<s:Button label="选择目录" id= "strPathOfExport" click="btn_selected(event, strPathOfExport_tf.id)"/>
+		</mx:HBox>
+		
+		<mx:HBox paddingTop=" 30 ">
+			<s:Label paddingTop="6" textAlign="left" width="150" text="AS导出包名"/>
+			<s:TextInput id="txt_AS3_packname" width="529"/>
+			<s:Button id="btnExport" label="导出数据" click="btn_export(event)" />
+		</mx:HBox>
+		
+	</mx:VBox>
+	
+</s:Group>

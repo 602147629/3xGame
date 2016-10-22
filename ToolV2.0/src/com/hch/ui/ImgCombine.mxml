@@ -1,0 +1,400 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		 added="onAdded(event)">
+	<fx:Script>
+		<![CDATA[
+			import com.hch.util.CImgUtil;
+			
+			import flash.filesystem.File;
+			
+			import mx.managers.PopUpManager;
+			
+			import spark.components.Image;
+			
+			
+			public var window:Main
+			private var file:File;
+			
+			//合并的类型 1 - 竖 0 - 横
+			private var _combineType:int = 1;
+			
+			private var __fileList:Array;
+			
+			private var _bitmapList:Array;
+			
+			private var _totalWidth:Number = 0 ;
+			private var _totalHeight:Number = 0;
+			
+			private var _dirPath:String = "";
+			
+			private var _posArray:Array ;
+			
+			private var _buttonNameList:Array;
+			
+			public var __totalBmd:BitmapData;
+			
+			private var __miniImgList:Array;
+			
+			private var pop:Showimg;
+			
+			protected function onAdded(event:Event):void
+			{
+				this.removeEventListener(Event.ADDED, onAdded);
+				
+				file = new File();
+				file.addEventListener(Event.SELECT, file_selectHandler);
+			}
+			
+			//File的选择事件
+			protected function file_selectHandler(event:Event):void
+			{
+				__reset();
+				
+				var arr:Array = file.getDirectoryListing();
+				
+				for each (var d:File in arr) 
+				{
+					if (!d.isDirectory && (d.name.indexOf("png") != -1|| d.name.indexOf("jpg") != -1 ) && d.name.indexOf("button_") == -1)
+					{
+						__fileList.push(d);
+						_buttonNameList.push(d.name);
+					}
+					
+				}
+				dg.dataProvider = __fileList;
+				
+				window.status = file.nativePath + " 共 "+__fileList.length+" 个文件";
+				
+				_dirPath = file.nativePath;
+			}
+			
+			private function __reset():void
+			{
+				__fileList = new Array();
+				for each (var d:BitmapData in _bitmapList) 
+				{
+					d.dispose();
+				}
+				
+				_bitmapList = new Array();
+				
+				_totalWidth = 0 ;
+				_totalHeight = 0;
+				
+				_posArray = new Array();
+				
+				_buttonNameList = new Array();
+				
+				__miniImgList = new Array();
+				
+				toggleImg();
+			}
+			
+			//单击按钮
+			protected function btn_clickHandler(event:MouseEvent):void
+			{
+				file.browseForDirectory("请选择一个文件夹");
+			}
+			
+			//单击按钮
+			protected function export_clickHandler(event:MouseEvent):void
+			{
+				__loadPng();
+			}
+			
+			private function __loadPng():void
+			{
+				if(!__fileList || !_bitmapList)
+				{
+					window.status = "请选择文件夹";
+					return;
+				}
+				
+				if( __fileList.length == 0)
+				{
+					window.status = "加载完毕";
+					
+					if(_bitmapList.length == 0)
+					{
+						window.status = "没有需要导出的图片资源";
+					}
+					else
+					{
+						__startExport();
+					}
+					
+					return;
+				}
+				
+				var path:String = (__fileList.shift() as File).nativePath;
+				
+				CImgUtil.loadPng(path , completeHandler);
+			}
+			
+			private function completeHandler(bmp:BitmapData):void
+			{
+				_bitmapList.push(bmp);
+				__loadPng();
+			}
+			
+			private function __startExport():void
+			{
+				if(_combineType == 1)
+				{
+					__calcWidthAndHeightV();
+					
+					__combineImgV();
+				}
+				else
+				{
+					__calcWidthAndHeightH()
+					
+					__combineImgH();
+				}
+			}
+			
+			private function __calcWidthAndHeightV():void
+			{
+				_totalWidth = 0 ;
+				_totalHeight = 0;
+				
+				window.status = "计算矩形.......";
+				
+				for each (var d:BitmapData in _bitmapList) 
+				{
+					
+					_totalWidth = d.width > _totalWidth ? d.width : _totalWidth ;
+					_totalHeight += d.height;
+				}
+			}
+			
+			private function __combineImgV():void
+			{
+				window.status = "拼接图片.......";
+				
+				if(__totalBmd)
+				{
+					__totalBmd.dispose();
+				}
+				
+				__totalBmd = new BitmapData(_totalWidth , _totalHeight , true , 0x00);
+				
+				var tempHeight:int = 0;
+				
+				_posArray = new Array();
+				
+				for each (var d:BitmapData in _bitmapList) 
+				{
+					var pos:Point = new Point(0 , tempHeight);
+					var size:Point = new Point(d.width , d.height);
+					
+					__totalBmd.copyPixels(d , d.rect , pos);
+					tempHeight += d.height;
+					
+					_posArray.push({pos:pos , size:size});
+				}
+				
+				__exportPNG(__totalBmd);
+				
+				__exportData();
+			}
+			
+			private function __calcWidthAndHeightH():void
+			{
+				_totalWidth = 0 ;
+				_totalHeight = 0;
+				
+				window.status = "计算矩形.......";
+				
+				for each (var d:BitmapData in _bitmapList) 
+				{
+					_totalHeight = d.height > _totalHeight ? d.height : _totalHeight ;
+					_totalWidth += d.width;
+				}
+			}
+			
+			private function __combineImgH():void
+			{
+				window.status = "拼接图片.......";
+				
+				if(__totalBmd)
+				{
+					__totalBmd.dispose();
+				}
+				
+				__totalBmd = new BitmapData(_totalWidth , _totalHeight , true , 0x00);
+				
+				var tempWidth:int = 0;
+				
+				_posArray = new Array();
+				
+				for each (var d:BitmapData in _bitmapList) 
+				{
+					var pos:Point = new Point(tempWidth , 0);
+					var size:Point = new Point(d.width , d.height);
+					
+					__totalBmd.copyPixels(d , d.rect , pos);
+					tempWidth += d.width;
+					
+					_posArray.push({pos:pos , size:size});
+				}
+				
+				__exportPNG(__totalBmd);
+				
+				__exportData();
+			}
+			
+			private function __exportPNG(bmd:BitmapData):void
+			{
+				export.enabled = false;
+				btn.enabled = false
+				
+				window.status = "正在导出图片.......";
+				
+				CImgUtil.exportPng(_dirPath+"\\button_result.png" , bmd);
+				
+				toggleImg();
+				
+				window.status = "导出图片完成";
+				
+				export.enabled = true;
+				btn.enabled = true
+			}
+			
+			private function __exportData():void
+			{
+				var content:String = "************ BMDATA_LIST ************ \r\n";
+				content += "{cname: \"button.common\" , size:new Point(" + _totalWidth + "," + _totalHeight +")}, \r\n\n";
+				
+				content += "************ BUTTON_LIST ************ \r\n";
+				for(var i:int =0 ; i < _posArray.length ; i++)
+				{
+					var pos:Point = _posArray[i].pos;
+					var size:Point = _posArray[i].size;
+					
+					var sigleWidth:int = int(size.x / 4);
+					
+					content += String(_buttonNameList[i]).substring(0 ,String(_buttonNameList[i]).indexOf("."))  + ": new CButtonInfo(" 
+						+ "new Point(" + sigleWidth +","+ size.y + ")" 
+						+ ",new Point(" + 0 +","+ pos.y + ")" 
+						+ ",new Point(" + sigleWidth +","+ pos.y + ")" 
+						+ ",new Point(" + sigleWidth * 2 +","+ pos.y + ")" 
+						+ ",new Point(" + sigleWidth * 3 +","+ pos.y + ")"
+						+" , null"
+						+"), \r\n";
+				}
+				
+				trace(content);
+				
+				var specFile:String = _dirPath+"\\button_spec.txt";
+				
+				var f:FileStream = new FileStream();
+				f.open(new File(specFile) , FileMode.WRITE);
+				
+				f.writeUTFBytes(content);
+				f.close();
+			}
+			
+			
+			private function show_Img():void
+			{
+				if(!_posArray || _posArray.length == 0)
+				{
+					return;
+				}
+				pop = Showimg( PopUpManager.createPopUp(this , Showimg , false) );
+				PopUpManager.centerPopUp(pop);
+				
+				var tempY:Number = 0;
+				for(var i:int =0 ; i < _posArray.length ; i++)
+				{
+					var miniImg:Image = __createMiniImg(_posArray[i].size , _posArray[i].pos);
+					__miniImgList.push(miniImg);
+					miniImg.x = 0 ;
+					miniImg.y = tempY;
+					pop.addElement(miniImg);
+					
+					tempY += miniImg.sourceHeight + 10;
+				}
+			}
+			
+			private function __createMiniImg(size:Point , pos:Point):Image
+			{
+				var img:Image = new Image();
+				var bmd:BitmapData = new BitmapData(size.x , size.y , true);
+				bmd.copyPixels(__totalBmd ,new Rectangle(pos.x , pos.y , size.x , size.y) , new Point(0 , 0));
+				img.source = bmd;
+				return img;
+			}
+			
+			protected function show_clickHandler(event:MouseEvent):void
+			{
+				toggleImg();
+			}
+			
+			private function toggleImg():void
+			{
+				if(pop)
+				{
+					removeImg();
+				}
+				else
+				{
+					show_Img();	
+				}
+			}
+			
+			public function windowedapplication1_closeHandler(event:Event):void
+			{
+				if(__totalBmd)
+				{
+					__totalBmd.dispose();
+				}
+			}
+			
+			public function removeImg():void
+			{
+				if(pop)
+				{
+					PopUpManager.removePopUp(pop);
+					pop.dispose();
+					pop = null;
+				}
+			}
+			
+			private function radiogroup1_change():void
+			{
+				_combineType = radiogroup1.selection.id == "button_horizontal" ? 0 : 1;
+				trace(" _combineType = " + _combineType);
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<s:RadioButtonGroup id="radiogroup1" change="radiogroup1_change()" />
+	</fx:Declarations>
+	<mx:HBox label="图片合并">
+		<s:Button id="btn" label="打开"  click="btn_clickHandler(event)"/>
+		
+		<s:Button id="export" label="导出" x="100" click="export_clickHandler(event)"/>
+		
+		<s:Button id="show" label="显示全部" x="200" click="show_clickHandler(event)"/>
+		
+		<s:RadioButton id="button_horizontal" label="Horizontal" groupName="radiogroup1" fontSize="12" />
+		
+		<s:RadioButton id="button_vertical" label="vertical" groupName="radiogroup1" fontSize="12" selected="true"/>
+	</mx:HBox> 
+	
+	<mx:DataGrid id="dg" width="100%" height="100%" y="30">
+		<mx:columns>
+			<mx:DataGridColumn headerText="文件名" dataField="name"/> 
+			<mx:DataGridColumn headerText="创建日期" dataField="creationDate"/>
+			<mx:DataGridColumn headerText="修改日期" dataField="modificationDate"/>
+			<mx:DataGridColumn headerText="文件夹" dataField="isDirectory"/>
+			<mx:DataGridColumn headerText="大小" dataField="size"/>
+			<mx:DataGridColumn headerText="类型" dataField="type"/>
+		</mx:columns>
+	</mx:DataGrid>
+</s:Group>

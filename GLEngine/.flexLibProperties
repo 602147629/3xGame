@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<flexLibProperties includeAllClasses="true" useMultiPlatformConfig="false" version="3">
+  <includeClasses>
+    <classEntry path="base.GLBase"/>
+    <classEntry path="manager.GLConfigManager"/>
+    <classEntry path="data.GLDataBase"/>
+    <classEntry path="manager.GLDataManager"/>
+    <classEntry path="data.GLDataOfUser"/>
+    <classEntry path="data.GLJsonBase"/>
+    <classEntry path="state.GLStateManager"/>
+    <classEntry path="state.IState"/>
+    <classEntry path="util.JsonUtil"/>
+    <classEntry path="data.GLJsonListBase"/>
+    <classEntry path="state.GLStateInit"/>
+    <classEntry path="util.SAssetUtil"/>
+  </includeClasses>
+  <includeResources/>
+  <namespaceManifests/>
+</flexLibProperties>
